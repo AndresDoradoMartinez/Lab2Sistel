@@ -1,0 +1,86 @@
+function SimParams = sdruqpsktransmitter_init(platform, useCodegen)
+%   Copyright 2012-2017 The MathWorks, Inc.
+
+%% General simulation parameters
+
+SimParams.Rsym = 1e6;         % Symbol rate in Hertz
+
+SimParams.ModulationOrder = 4;      % QPSK alphabet size
+SimParams.Interpolation = 2;        % Interpolation factor
+SimParams.Decimation = 1;           % Decimation factor
+SimParams.Tsym = 1/SimParams.Rsym;  % Symbol time in sec
+SimParams.Fs   = SimParams.Rsym * SimParams.Interpolation; % Sample rate
+
+%% Image Processing 
+
+% Cargar la imagen
+img = imread('imagen6.jpg');
+%img_gray = img;
+
+% Dividir la imagen en sus canales de color (rojo, verde, azul)
+red_channel = img(:,:,1);
+green_channel = img(:,:,2);
+blue_channel = img(:,:,3);
+
+% Convertir cada canal de color en una secuencia de bits
+red_vector = red_channel(:);
+green_vector = green_channel(:);
+blue_vector = blue_channel(:);
+
+red_bits = reshape(de2bi(red_vector, 8, 'left-msb').', 1, []);
+green_bits = reshape(de2bi(green_vector, 8, 'left-msb').', 1, []);
+blue_bits = reshape(de2bi(blue_vector, 8, 'left-msb').', 1, []);
+
+% graficar planos
+figure(1), imshow (img), title ('imagen a transmitir');
+% figure(1), subplot (2,3,1), imshow (img), title ('imagen original');
+% figure(1), subplot (2,3,4), imshow (red_channel), title ('imagen r');
+% figure(1), subplot (2,3,5), imshow (green_channel), title ('imagen g');
+% figure(1), subplot (2,3,6), imshow (blue_channel), title ('imagen b');
+
+% Concatenar los bits de los canales de color para formar la secuencia de bits de la imagen
+img_bits = [red_bits green_bits blue_bits];
+
+SimParams.BarkerCode      = [+1 +1 +1 +1 +1 -1 -1 +1 +1 -1 +1 -1 +1];     % Bipolar Barker Code
+SimParams.BarkerLength    = length(SimParams.BarkerCode);
+SimParams.HeaderLength    = SimParams.BarkerLength * 2;                   % Duplicate 2 Barker codes to be as a header
+SimParams.MessageLength   = length(img_bits);                
+SimParams.NumberOfMessage = 1;                                          % Number of messages in a frame
+SimParams.PayloadLength   = SimParams.NumberOfMessage * SimParams.MessageLength ; % 8 bits per characters
+SimParams.FrameSize       = (SimParams.HeaderLength + SimParams.PayloadLength) ...
+    / log2(SimParams.ModulationOrder);                                    % Frame size in symbols
+SimParams.FrameTime       = SimParams.Tsym*SimParams.FrameSize;
+
+%% Tx parameters
+SimParams.RolloffFactor     = 0.5;                                        % Rolloff Factor of Raised Cosine Filter
+SimParams.ScramblerBase     = 2;
+SimParams.ScramblerPolynomial           = [1 1 1 0 1];
+SimParams.ScramblerInitialConditions    = [0 0 0 0];
+SimParams.RaisedCosineFilterSpan = 10; % Filter span of Raised Cosine Tx Rx filters (in symbols)
+SimParams.MessageBits = img_bits;
+
+%% USRP transmitter parameters
+switch platform
+  case {'B200','B210'}
+    SimParams.MasterClockRate = 20e6;           % Hz
+  case {'X300','X310'}
+    SimParams.MasterClockRate = 200e6;          % Hz
+  case {'N300','N310'}
+    SimParams.MasterClockRate = 153.6e6;        % Hz
+  case {'N320/N321'}
+    SimParams.MasterClockRate = 200e6;          % Hz
+  case {'N200/N210/USRP2'}
+    SimParams.MasterClockRate = 100e6;          % Hz
+  otherwise
+    error(message('sdru:examples:UnsupportedPlatform', ...
+      platform))
+end
+SimParams.USRPCenterFrequency       = 915e6;
+SimParams.USRPGain                  = 25;
+SimParams.USRPFrontEndSampleRate    = SimParams.Rsym * 2; % Nyquist sampling theorem
+SimParams.USRPInterpolationFactor   = SimParams.MasterClockRate/SimParams.USRPFrontEndSampleRate;
+SimParams.USRPFrameLength           = SimParams.Interpolation * SimParams.FrameSize;
+
+% Experiment Parameters
+SimParams.USRPFrameTime = SimParams.USRPFrameLength/SimParams.USRPFrontEndSampleRate;
+SimParams.StopTime = 1000;
