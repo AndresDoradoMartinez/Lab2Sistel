@@ -1,0 +1,56 @@
+function Image(img_bitsrx, img_bits)
+% Imagen Recuperada con corrección de desplazamiento usando xcorr
+
+% Convertir a double para usar xcorr correctamente
+img_bitsrx = double(img_bitsrx(:));
+img_bits = double(img_bits(:));
+
+% Correlación cruzada para encontrar el desfase
+[corr_result, lags] = xcorr(img_bitsrx, img_bits);
+[~, idx] = max(corr_result);
+desfase = lags(idx);
+
+% Corregir el desplazamiento
+if desfase > 0
+    img_bitsrx_corr = img_bitsrx(desfase+1:end);
+elseif desfase < 0
+    img_bitsrx_corr = [zeros(abs(desfase),1); img_bitsrx];
+else
+    img_bitsrx_corr = img_bitsrx;
+end
+
+% Asegurar que tenga el mismo tamaño que img_bits
+% Asegurar que img_bitsrx_corr tenga el mismo tamaño que img_bits
+if length(img_bitsrx_corr) < numel(img_bits)
+    % Rellenar con ceros si faltan bits
+    faltan = numel(img_bits) - length(img_bitsrx_corr);
+    img_bitsrx_corr = [img_bitsrx_corr; zeros(faltan, 1)];
+else
+    % Recortar si sobran bits
+    img_bitsrx_corr = img_bitsrx_corr(1:numel(img_bits));
+end
+
+% Restaurar canales de color
+num_bits = numel(img_bitsrx_corr) / 3;
+
+red_bits2 = img_bitsrx_corr(1:num_bits);
+green_bits2 = img_bitsrx_corr(num_bits+1 : 2*num_bits);
+blue_bits2 = img_bitsrx_corr(2*num_bits+1 : end);
+
+% Convertir de bits a valores de píxel
+red_vector2 = bi2de(reshape(red_bits2, 8, []).', 'left-msb');
+green_vector2 = bi2de(reshape(green_bits2, 8, []).', 'left-msb');
+blue_vector2 = bi2de(reshape(blue_bits2, 8, []).', 'left-msb');
+
+% Reconstruir la imagen
+red_channel = reshape(red_vector2, 265, 267);
+green_channel = reshape(green_vector2, 265, 267);
+blue_channel = reshape(blue_vector2, 265, 267);
+
+img_final = cat(3, red_channel, green_channel, blue_channel);
+
+% Mostrar imagen recuperada
+imshow(uint8(img_final));
+title('Imagen Recuperada con Corrección xcorr');
+
+end
